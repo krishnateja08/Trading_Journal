@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPHA-EDGE // Institutional Trading Intelligence Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        terminal: {
+                            bg: '#080a0f',
+                            panel: '#10141d',
+                            border: '#1e2638',
+                            hover: '#182030',
+                            accent: '#3b82f6',
+                            green: '#10b981',
+                            greenGlow: 'rgba(16, 185, 129, 0.15)',
+                            red: '#ef4444',
+                            redGlow: 'rgba(239, 68, 68, 0.15)',
+                            gold: '#f59e0b',
+                            text: '#94a3b8',
+                            bright: '#f1f5f9'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Roboto Mono', 'monospace'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #080a0f; color: #94a3b8; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #080a0f; }
+        ::-webkit-scrollbar-thumb { background: #1e2638; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2d3748; }
+
+        .terminal-border { border: 1px solid #1e2638; }
+        .glow-green { box-shadow: 0 0 12px rgba(16, 185, 129, 0.25); }
+        .glow-red { box-shadow: 0 0 12px rgba(239, 68, 68, 0.25); }
+        .glow-blue { box-shadow: 0 0 12px rgba(59, 130, 246, 0.25); }
+
+        .tab-btn.active {
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+    </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col bg-terminal-bg text-terminal-text">
+
+    <!-- TOP STATUS HEADER -->
+    <header class="h-12 bg-terminal-panel terminal-border border-b flex items-center justify-between px-4 text-xs font-mono select-none z-20">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-terminal-green animate-pulse"></span>
+                <span class="font-bold text-terminal-bright tracking-wider text-sm">ALPHA-EDGE <span class="text-terminal-accent text-xs">v3.8 PRO</span></span>
+            </div>
+            <div class="hidden md:flex items-center text-slate-400 pl-4 border-l border-terminal-border"><span id="hdrStats">0 TRADES LOGGED</span></div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <button onclick="openModal('quickTradeModal')" class="bg-terminal-accent hover:bg-blue-600 text-white font-semibold px-3 py-1.5 rounded flex items-center space-x-1 transition shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-plus text-xs"></i>
+                <span>Log Trade</span>
+            </button>
+            
+            <div class="border-l border-terminal-border h-5 mx-1"></div>
+
+            <button onclick="openGh()" class="bg-slate-800 hover:bg-slate-700 text-terminal-bright border border-terminal-border px-2.5 py-1.5 rounded flex items-center space-x-1 transition" title="Sync journal.json with a GitHub repo"><i class="fa-brands fa-github text-xs"></i><span class="hidden sm:inline">GitHub</span></button>
+            <button onclick="connectFile()" class="bg-emerald-900/40 hover:bg-emerald-800/50 text-terminal-green border border-emerald-700/50 px-2.5 py-1.5 rounded flex items-center space-x-1 transition" title="Link a journal.json file for auto-save"><i class="fa-solid fa-file-code text-xs"></i><span class="hidden sm:inline">Link JSON</span></button>
+            <button onclick="exportDataJSON()" class="bg-terminal-border hover:bg-slate-700 text-terminal-bright px-2.5 py-1.5 rounded flex items-center space-x-1 transition" title="Export JSON">
+                <i class="fa-solid fa-download text-xs"></i>
+                <span class="hidden sm:inline">Export</span>
+            </button>
+            <label class="bg-terminal-border hover:bg-slate-700 text-terminal-bright px-2.5 py-1.5 rounded flex items-center space-x-1 cursor-pointer transition" title="Import JSON">
+                <i class="fa-solid fa-upload text-xs"></i>
+                <span class="hidden sm:inline">Import</span>
+                <input type="file" id="importJsonInput" accept=".json" onchange="importDataJSON(event)" class="hidden">
+            </label>
+
+            <button onclick="toggleDrawer('archDrawer')" class="bg-slate-800 hover:bg-slate-700 text-terminal-gold px-2.5 py-1.5 rounded border border-terminal-gold/30 flex items-center space-x-1">
+                <i class="fa-solid fa-server text-xs"></i>
+                <span class="hidden md:inline">Flask Blueprint</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE CONTAINER -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- SIDEBAR NAVIGATION -->
+        <aside class="w-16 md:w-56 bg-terminal-panel terminal-border border-r flex flex-col justify-between select-none">
+            <nav class="py-2 space-y-1">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover active">
+                    <i class="fa-solid fa-chart-line text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Dashboard</span>
+                </button>
+                <button onclick="switchTab('journal')" id="nav-journal" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-book-bookmark text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Trade Journal</span>
+                </button>
+                <button onclick="switchTab('notes')" id="nav-notes" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-pen-to-square text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Notes</span>
+                </button>
+                <button onclick="switchTab('playbook')" id="nav-playbook" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-chess-knight text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Playbook</span>
+                </button>
+                <button onclick="switchTab('psychology')" id="nav-psychology" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-brain text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Psychology</span>
+                </button>
+                <button onclick="switchTab('analytics')" id="nav-analytics" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-chart-pie text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Analytics</span>
+                </button>
+                <button onclick="switchTab('aireview')" id="nav-aireview" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-robot text-lg w-5 text-terminal-gold"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">AI Audit Desk</span>
+                </button>
+                <button onclick="switchTab('reviews')" id="nav-reviews" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-calendar-check text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Period Reviews</span>
+                </button>
+                <button onclick="switchTab('gallery')" id="nav-gallery" class="tab-btn w-full px-4 py-3 flex items-center space-x-3 text-left hover:bg-terminal-hover">
+                    <i class="fa-solid fa-images text-lg w-5"></i>
+                    <span class="hidden md:inline text-xs font-semibold uppercase tracking-wider">Media Desk</span>
+                </button>
+            </nav>
+
+            <div class="p-3 border-t border-terminal-border text-center md:text-left text-xs font-mono">
+                <div class="hidden md:block text-slate-500 mb-1">DATA STORE</div>
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-database text-terminal-green"></i>
+                    <span class="hidden md:inline text-terminal-bright" id="storeLabel">Browser Storage</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN VIEW AREA -->
+        <main class="flex-1 overflow-y-auto p-4 space-y-4 bg-terminal-bg" id="mainContent">
+
+            <!-- 1. DASHBOARD MODULE -->
+            <section id="module-dashboard" class="space-y-4">
+                <!-- EXECUTIVE METRICS STRIP -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="bg-terminal-panel p-3 rounded terminal-border relative overflow-hidden">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Net Realized P&L</div>
+                        <div id="kpi-net-pnl" class="text-xl font-mono font-bold mt-1 text-terminal-green">+$0.00</div>
+                        <div class="text-[10px] text-slate-500 mt-1 flex justify-between">
+                            <span>Wins: <span id="kpi-win-count" class="text-terminal-green">0</span></span>
+                            <span>Loss: <span id="kpi-loss-count" class="text-terminal-red">0</span></span>
+                        </div>
+                    </div>
+                    <div class="bg-terminal-panel p-3 rounded terminal-border">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Win Rate</div>
+                        <div id="kpi-win-rate" class="text-xl font-mono font-bold mt-1 text-terminal-bright">0.0%</div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+                            <div id="kpi-win-bar" class="bg-terminal-green h-1.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="bg-terminal-panel p-3 rounded terminal-border">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Profit Factor</div>
+                        <div id="kpi-profit-factor" class="text-xl font-mono font-bold mt-1 text-terminal-accent">0.00</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Target: &gt; 2.0</div>
+                    </div>
+                    <div class="bg-terminal-panel p-3 rounded terminal-border">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Avg Expectancy</div>
+                        <div id="kpi-expectancy" class="text-xl font-mono font-bold mt-1 text-terminal-green">+0.00 R</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Per Execution</div>
+                    </div>
+                    <div class="bg-terminal-panel p-3 rounded terminal-border">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Max Drawdown</div>
+                        <div id="kpi-max-dd" class="text-xl font-mono font-bold mt-1 text-terminal-red">-0.0%</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Peak-to-Trough</div>
+                    </div>
+                    <div class="bg-terminal-panel p-3 rounded terminal-border">
+                        <div class="text-slate-400 text-xs font-mono uppercase">Sharpe Ratio</div>
+                        <div id="kpi-sharpe" class="text-xl font-mono font-bold mt-1 text-terminal-gold">0.00</div>
+                        <div class="text-[10px] text-slate-500 mt-1">Risk Adjusted</div>
+                    </div>
+                </div>
+
+                <!-- MAIN CHARTS ROW -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- Live Equity Curve -->
+                    <div class="lg:col-span-2 bg-terminal-panel p-4 rounded terminal-border flex flex-col h-80">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-terminal-accent"></i> Cumulative Performance Curve ($)
+                            </h3>
+                            <span class="text-[11px] font-mono text-slate-400">All Trades Chronological</span>
+                        </div>
+                        <div class="flex-1 relative">
+                            <canvas id="dashboardEquityChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Risk Exposure & Market Distribution Gauge -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border flex flex-col h-80">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-pie-chart text-terminal-gold"></i> Asset Allocation &amp; Exposure
+                        </h3>
+                        <div class="flex-1 relative">
+                            <canvas id="marketAllocationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM DASHBOARD GRID: HEATMAP & RECENT TRADES -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- Monthly Matrix / Calendar Heatmap -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-days text-terminal-green"></i> P&amp;L Performance Heatmap
+                        </h3>
+                        <div id="pnlHeatmapGrid" class="grid grid-cols-7 gap-1.5 text-center text-xs font-mono">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Recent Executions Widget -->
+                    <div class="lg:col-span-2 bg-terminal-panel p-4 rounded terminal-border overflow-x-auto">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-terminal-accent"></i> Recent Executions
+                            </h3>
+                            <button onclick="switchTab('journal')" class="text-xs text-terminal-accent hover:underline font-mono">View All &rarr;</button>
+                        </div>
+                        <table class="w-full text-left text-xs font-mono">
+                            <thead class="text-slate-500 uppercase border-b border-terminal-border">
+                                <tr>
+                                    <th class="pb-2">Date</th>
+                                    <th class="pb-2">Symbol</th>
+                                    <th class="pb-2">Type</th>
+                                    <th class="pb-2">Strategy</th>
+                                    <th class="pb-2">R-Mult</th>
+                                    <th class="pb-2 text-right">Net P&amp;L</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashboardRecentTradesTable" class="divide-y divide-terminal-border">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. TRADE JOURNAL MODULE -->
+            <section id="module-journal" class="space-y-4 hidden">
+                <!-- FILTERS & CONTROLS TOOLBAR -->
+                <div class="bg-terminal-panel p-3 rounded terminal-border flex flex-wrap gap-3 items-center justify-between text-xs font-mono">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="text" id="filterSearch" oninput="applyJournalFilters()" placeholder="Search Ticker, Strategy, Notes..." class="bg-terminal-bg border border-terminal-border rounded px-2.5 py-1.5 text-terminal-bright focus:outline-none focus:border-terminal-accent w-48">
+                        
+                        <select id="filterMarket" onchange="applyJournalFilters()" class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-slate-300">
+                            <option value="ALL">All Markets</option>
+                            <option value="US_STOCK">US Stocks</option>
+                            <option value="IN_STOCK">India Stocks (NSE/BSE)</option>
+                            <option value="OPTIONS">Options</option>
+                        </select>
+
+                        <select id="filterStrategy" onchange="applyJournalFilters()" class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-slate-300">
+                            <option value="ALL">All Strategies</option>
+                            <option value="VCP Breakout">VCP Breakout</option>
+                            <option value="ORB 15-Min">ORB 15-Min</option>
+                            <option value="0DTE SPX Condor">0DTE SPX Condor</option>
+                            <option value="NIFTY Trend Cont">NIFTY Trend Cont</option>
+                        </select>
+
+                        <select id="filterOutcome" onchange="applyJournalFilters()" class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-slate-300">
+                            <option value="ALL">All Outcomes</option>
+                            <option value="WIN">Winners</option>
+                            <option value="LOSS">Losses</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <span id="journalRecordCount" class="text-slate-400">0 Trades Logged</span>
+                        <button onclick="openModal('quickTradeModal')" class="bg-terminal-accent hover:bg-blue-600 text-white px-3 py-1.5 rounded font-sans font-medium">
+                            <i class="fa-solid fa-plus mr-1"></i> New Entry
+                        </button>
+                    </div>
+                </div>
+
+                <!-- JOURNAL DATA TABLE -->
+                <div class="bg-terminal-panel rounded terminal-border overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs font-mono">
+                            <thead class="bg-slate-900/60 text-slate-400 uppercase border-b border-terminal-border">
+                                <tr>
+                                    <th class="p-3">ID / Date</th>
+                                    <th class="p-3">Symbol</th>
+                                    <th class="p-3">Market</th>
+                                    <th class="p-3">Strategy</th>
+                                    <th class="p-3">Entry / Exit</th>
+                                    <th class="p-3">Size / Risk</th>
+                                    <th class="p-3">R-Multiple</th>
+                                    <th class="p-3">Net P&amp;L</th>
+                                    <th class="p-3">Psych State</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="journalTableBody" class="divide-y divide-terminal-border">
+                                <!-- Dynamic Trade Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- NOTES MODULE -->
+            <section id="module-notes" class="space-y-4 hidden">
+                <div class="bg-terminal-panel p-4 rounded terminal-border space-y-3 text-xs font-mono">
+                    <h3 class="font-bold text-terminal-bright uppercase flex items-center gap-2"><i class="fa-solid fa-pen-to-square text-terminal-accent"></i> <span id="noteFormTitle">New Note</span></h3>
+                    <div class="flex flex-wrap gap-2">
+                        <input type="date" id="noteDate" class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-terminal-bright">
+                        <select id="noteExchange" onchange="fillIndexes()" class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-terminal-bright"><option value="">General (no exchange)</option><option value="NSE">NSE (India)</option><option value="NYSE">NYSE (US)</option></select>
+                        <select id="noteIndex" disabled class="bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-terminal-bright disabled:opacity-40"><option value="">All / General</option></select>
+                        <input type="text" id="noteTitle" placeholder="Title (optional)" class="flex-1 min-w-[12rem] bg-terminal-bg border border-terminal-border rounded px-2.5 py-1.5 text-terminal-bright focus:outline-none focus:border-terminal-accent">
+                    </div>
+                    <textarea id="noteBody" rows="6" placeholder="Write anything: market view, lessons, mood, plan for tomorrow..." class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright focus:outline-none focus:border-terminal-accent"></textarea>
+                    <div class="flex gap-2">
+                        <button onclick="saveNote()" class="bg-terminal-accent hover:bg-blue-600 text-white px-3 py-1.5 rounded font-sans font-medium" id="noteSaveBtn">Save Note</button>
+                        <button onclick="resetNoteForm()" id="noteCancelBtn" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded">Cancel Edit</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-xs font-mono">
+                    <input type="text" id="noteSearch" oninput="renderNotes()" placeholder="Search notes..." class="bg-terminal-bg border border-terminal-border rounded px-2.5 py-1.5 text-terminal-bright w-64 focus:outline-none focus:border-terminal-accent">
+                    <span id="noteCount" class="text-slate-400">0 Notes</span>
+                </div>
+                <div id="notesList" class="space-y-3"></div>
+            </section>
+
+            <!-- 3. STRATEGY PLAYBOOK MODULE -->
+            <section id="module-playbook" class="space-y-4 hidden">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-base font-mono font-bold text-terminal-bright">STRATEGY PLAYBOOK &amp; RULES</h2>
+                        <p class="text-xs text-slate-400">Quantitative rulesets, edge validation, and setup performance</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="playbookContainer">
+                    <!-- Playbook cards populated dynamically -->
+                </div>
+            </section>
+
+            <!-- 4. PSYCHOLOGY & MISTAKE TRACKER MODULE -->
+            <section id="module-psychology" class="space-y-4 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- Mistake Cost Breakdown Chart -->
+                    <div class="lg:col-span-2 bg-terminal-panel p-4 rounded terminal-border">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-terminal-red"></i> Discipline Leakage: Financial Cost of Execution Errors
+                        </h3>
+                        <div class="h-64 relative">
+                            <canvas id="mistakeCostChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Emotional State correlation -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-heart-pulse text-terminal-gold"></i> Mindset vs. Win Rate Correlation
+                            </h3>
+                            <div id="mindsetStatsList" class="space-y-3 text-xs font-mono">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. PERFORMANCE ANALYTICS MODULE -->
+            <section id="module-analytics" class="space-y-4 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Drawdown Underwater Chart -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border h-72 flex flex-col">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-2">Underwater Drawdown Curve ($)</h3>
+                        <div class="flex-1 relative">
+                            <canvas id="drawdownChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Day of Week P&L Matrix -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border h-72 flex flex-col">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-2">Day of Week Performance ($)</h3>
+                        <div class="flex-1 relative">
+                            <canvas id="dayOfWeekChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Strategy R Distribution -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border h-72 flex flex-col">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-2">Strategy R-Multiple Contribution</h3>
+                        <div class="flex-1 relative">
+                            <canvas id="strategyRChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Trade Duration / Holding Time Analysis -->
+                    <div class="bg-terminal-panel p-4 rounded terminal-border h-72 flex flex-col">
+                        <h3 class="text-xs font-mono uppercase font-semibold text-terminal-bright mb-2">Win / Loss Return Distribution</h3>
+                        <div class="flex-1 relative">
+                            <canvas id="winLossDistChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. AI TRADE REVIEW MODULE -->
+            <section id="module-aireview" class="space-y-4 hidden">
+                <div class="bg-terminal-panel p-4 rounded terminal-border">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-9 h-9 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-terminal-gold">
+                                <i class="fa-solid fa-robot text-lg"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-mono font-bold text-terminal-bright">INSTITUTIONAL QUANT &amp; RISK AUDIT DESK</h2>
+                                <p class="text-xs text-slate-400">Automated edge evaluation &amp; discipline diagnostic engine</p>
+                            </div>
+                        </div>
+                        <button onclick="generateAIAudit()" class="bg-terminal-gold/20 hover:bg-terminal-gold/30 text-terminal-gold border border-terminal-gold/40 px-3 py-1.5 rounded font-mono text-xs flex items-center space-x-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Run Full System Audit</span>
+                        </button>
+                    </div>
+
+                    <div id="aiAuditReport" class="space-y-4 font-mono text-xs">
+                        <!-- Dynamic AI Insights report populated here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. PERIOD REVIEWS MODULE -->
+            <section id="module-reviews" class="space-y-4 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-terminal-panel p-4 rounded terminal-border space-y-3">
+                        <h3 class="text-xs font-mono font-bold text-terminal-bright uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-week text-terminal-accent"></i> Weekly Execution Summary
+                        </h3>
+                        <textarea id="weeklyReviewNotes" rows="6" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-xs text-terminal-bright focus:outline-none focus:border-terminal-accent" placeholder="Record key market takeaways, rule compliance rate, and focus areas for next week..."></textarea>
+                        <button onclick="savePeriodReview('weekly')" class="bg-terminal-accent hover:bg-blue-600 text-white px-3 py-1.5 rounded text-xs">Save Weekly Log</button>
+                    </div>
+
+                    <div class="bg-terminal-panel p-4 rounded terminal-border space-y-3">
+                        <h3 class="text-xs font-mono font-bold text-terminal-bright uppercase flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-alt text-terminal-gold"></i> Monthly Strategic Review
+                        </h3>
+                        <textarea id="monthlyReviewNotes" rows="6" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-xs text-terminal-bright focus:outline-none focus:border-terminal-accent" placeholder="Assess macro shifts, position sizing adjustments, and systemic performance..."></textarea>
+                        <button onclick="savePeriodReview('monthly')" class="bg-terminal-gold/20 hover:bg-terminal-gold/30 text-terminal-gold border border-terminal-gold/40 px-3 py-1.5 rounded text-xs">Save Monthly Log</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 8. SCREENSHOT & MEDIA DESK -->
+            <section id="module-gallery" class="space-y-4 hidden">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xs font-mono font-bold text-terminal-bright uppercase">Chart Setup &amp; Execution Visual Archive</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="galleryContainer">
+                    <!-- Dynamic chart screenshots -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- GITHUB SYNC MODAL -->
+    <div id="ghModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-terminal-panel border border-terminal-border rounded-lg w-full max-w-md shadow-2xl p-4 space-y-3 text-xs font-mono">
+            <h3 class="font-bold text-terminal-bright uppercase flex items-center gap-2"><i class="fa-brands fa-github"></i> GitHub Sync</h3>
+            <p class="text-slate-400">Your journal.json is read from and saved to this repo. The token stays in this browser only.</p>
+            <div><label class="block text-slate-400 mb-1">GitHub username</label><input id="ghOwner" type="text" autocomplete="off" placeholder="your-username" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></div><div><label class="block text-slate-400 mb-1">Data repository (private)</label><input id="ghRepo" type="text" autocomplete="off" placeholder="trading-journal-data" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></div><div><label class="block text-slate-400 mb-1">Branch</label><input id="ghBranch" type="text" autocomplete="off" placeholder="main" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></div><div><label class="block text-slate-400 mb-1">File path</label><input id="ghPath" type="text" autocomplete="off" placeholder="journal.json" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></div><div><label class="block text-slate-400 mb-1">Fine-grained access token</label><input id="ghToken" type="password" autocomplete="off" placeholder="github_pat_..." class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></div>
+            <div class="flex justify-between pt-2 border-t border-terminal-border">
+                <button onclick="disconnectGh()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded">Disconnect</button>
+                <div class="space-x-2"><button onclick="closeModal('ghModal')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded">Cancel</button><button onclick="saveGh()" class="px-3 py-1.5 bg-terminal-accent hover:bg-blue-600 text-white font-bold rounded">Save &amp; Sync</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUICK TRADE LOG MODAL -->
+    <div id="quickTradeModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-terminal-panel border border-terminal-border rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+            <div class="p-4 border-b border-terminal-border flex justify-between items-center bg-slate-900/50">
+                <h3 class="text-xs font-mono font-bold text-terminal-bright uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-square-plus text-terminal-accent"></i> New Trade Intelligence Entry
+                </h3>
+                <button onclick="closeModal('quickTradeModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+
+            <form id="tradeEntryForm" onsubmit="handleTradeSubmit(event)" class="p-4 space-y-4 text-xs font-mono">
+                <!-- Market & Symbol Selection -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Market Type</label>
+                        <select id="tradeMarket" onchange="toggleOptionFields()" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright">
+                            <option value="US_STOCK">US Stock (USD $)</option>
+                            <option value="IN_STOCK">India Stock (NSE/BSE ₹)</option>
+                            <option value="OPTIONS">Options Strategy</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Ticker / Symbol</label>
+                        <input type="text" id="tradeSymbol" required placeholder="NVDA or NIFTY24OCT" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright uppercase">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Strategy Setup</label>
+                        <select id="tradeStrategy" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright">
+                            <option value="VCP Breakout">VCP Breakout</option>
+                            <option value="ORB 15-Min">ORB 15-Min</option>
+                            <option value="0DTE SPX Condor">0DTE SPX Condor</option>
+                            <option value="NIFTY Trend Cont">NIFTY Trend Cont</option>
+                            <option value="Mean Reversion">Mean Reversion</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Option specific fields -->
+                <div id="optionFieldsGroup" class="grid grid-cols-3 gap-3 bg-slate-900/40 p-3 rounded border border-terminal-border/50 hidden">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Option Type</label>
+                        <select id="optType" class="w-full bg-terminal-bg border border-terminal-border rounded p-1.5 text-terminal-bright">
+                            <option value="CALL">Call (Long)</option>
+                            <option value="PUT">Put (Long)</option>
+                            <option value="SPREAD">Spread / Multi-Leg</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Strike Price</label>
+                        <input type="number" step="any" id="optStrike" placeholder="130" class="w-full bg-terminal-bg border border-terminal-border rounded p-1.5 text-terminal-bright">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Expiration Date</label>
+                        <input type="date" id="optExpiry" class="w-full bg-terminal-bg border border-terminal-border rounded p-1.5 text-terminal-bright">
+                    </div>
+                </div>
+
+                <!-- Price & Size Inputs with Calculator -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-terminal-bg p-3 rounded border border-terminal-border">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Entry Price</label>
+                        <input type="number" step="any" id="tradeEntry" required oninput="calculateRiskReward()" placeholder="100.00" class="w-full bg-slate-900 border border-terminal-border rounded p-1.5 text-terminal-bright font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Exit Price</label>
+                        <input type="number" step="any" id="tradeExit" required oninput="calculateRiskReward()" placeholder="110.00" class="w-full bg-slate-900 border border-terminal-border rounded p-1.5 text-terminal-bright font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Stop Loss</label>
+                        <input type="number" step="any" id="tradeSL" required oninput="calculateRiskReward()" placeholder="95.00" class="w-full bg-slate-900 border border-terminal-border rounded p-1.5 text-terminal-bright font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Quantity / Size</label>
+                        <input type="number" id="tradeSize" required oninput="calculateRiskReward()" placeholder="100" class="w-full bg-slate-900 border border-terminal-border rounded p-1.5 text-terminal-bright font-bold">
+                    </div>
+                </div>
+
+                <!-- Calculated Output Metrics -->
+                <div class="grid grid-cols-3 gap-3 text-center bg-slate-900/80 p-2.5 rounded border border-terminal-border">
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">PROJECTED P&amp;L</span>
+                        <span id="calcPnl" class="font-bold text-sm text-terminal-green">$0.00</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">CALCULATED R-MULT</span>
+                        <span id="calcR" class="font-bold text-sm text-terminal-accent">0.00 R</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block text-[10px]">ACCOUNT RISK %</span>
+                        <span id="calcRiskPct" class="font-bold text-sm text-terminal-gold">—</span>
+                    </div>
+                </div>
+
+                <!-- Psychological State & Mistake Tag -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Emotional State During Execution</label>
+                        <select id="tradePsych" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright">
+                            <option value="Disciplined/Calm">Disciplined &amp; Calm</option>
+                            <option value="FOMO Entry">FOMO / Chasing</option>
+                            <option value="Revenge Trade">Revenge Trading</option>
+                            <option value="Hesitant/Fear">Hesitant / Anxious</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 mb-1">Execution Mistake Tag (if applicable)</label>
+                        <select id="tradeMistake" class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright">
+                            <option value="None">None (Flawless Execution)</option>
+                            <option value="Moved SL Early">Moved SL Early</option>
+                            <option value="Chased Entry">Chased Entry</option>
+                            <option value="Oversized Position">Oversized Position</option>
+                            <option value="Exited Prematurely">Exited Prematurely</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Notes & Chart Mock Attachment -->
+                <div>
+                    <label class="block text-slate-400 mb-1">Trade Rationale &amp; Notes</label>
+                    <textarea id="tradeNotes" rows="2" placeholder="Detail catalysts, market context, level 2 tape reading, or execution nuances..." class="w-full bg-terminal-bg border border-terminal-border rounded p-2 text-terminal-bright"></textarea>
+                </div>
+
+                <div class="flex justify-end space-x-2 pt-2 border-t border-terminal-border">
+                    <button type="button" onclick="closeModal('quickTradeModal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-terminal-accent hover:bg-blue-600 text-white font-bold rounded">Log Execution</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FLASK ARCHITECTURE BLUEPRINT DRAWER -->
+    <div id="archDrawer" class="fixed inset-y-0 right-0 w-full max-w-xl bg-terminal-panel border-l border-terminal-border z-50 transform translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
+        <div class="p-4 border-b border-terminal-border flex justify-between items-center bg-slate-900">
+            <h3 class="text-xs font-mono font-bold text-terminal-gold uppercase flex items-center gap-2">
+                <i class="fa-solid fa-code"></i> Production Flask Backend &amp; DB Blueprint
+            </h3>
+            <button onclick="toggleDrawer('archDrawer')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+        </div>
+        <div class="p-4 flex-1 overflow-y-auto space-y-4 font-mono text-xs">
+            <p class="text-slate-400">Below is the modular production Flask application code and database model designed to serve this frontend UI using SQLite / PostgreSQL:</p>
+            
+            <div class="bg-black/80 p-3 rounded border border-terminal-border text-slate-300 overflow-x-auto">
+<pre><code># app.py - Flask Trading Journal Backend
+from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///trading_journal.db'
+db = SQLAlchemy(app)
+
+class Trade(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    symbol = db.Column(db.String(20), nullable=False)
+    market = db.Column(db.String(20), nullable=False)
+    strategy = db.Column(db.String(50))
+    entry_price = db.Column(db.Float, nullable=False)
+    exit_price = db.Column(db.Float, nullable=False)
+    stop_loss = db.Column(db.Float, nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    pnl = db.Column(db.Float, nullable=False)
+    r_multiple = db.Column(db.Float, nullable=False)
+    psych_state = db.Column(db.String(50))
+    mistake_tag = db.Column(db.String(50))
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+@app.route('/api/trades', methods=['GET'])
+def get_trades():
+    trades = Trade.query.order_by(Trade.created_at.desc()).all()
+    return jsonify([{
+        'id': t.id, 'symbol': t.symbol, 'market': t.market,
+        'strategy': t.strategy, 'pnl': t.pnl, 'r_multiple': t.r_multiple
+    } for t in trades])
+
+@app.route('/api/trades', methods=['POST'])
+def add_trade():
+    data = request.json
+    trade = Trade(**data)
+    db.session.add(trade)
+    db.session.commit()
+    return jsonify({"status": "success", "id": trade.id}), 201
+
+if __name__ == '__main__':
+    db.create_all()
+    app.run(debug=True, port=5000)
+</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CORE CLIENT-SIDE JSON PERSISTENCE & DATA ENGINE
+        const STORAGE_KEY = 'ALPHA_EDGE_TRADING_JOURNAL_V2';
+
+        // Sample Institutional Seed Data
+        const DEFAULT_TRADES = [];
+
+        let tradeStore = [];
+
+        // App Initialization
+        const REV_KEY = 'ALPHA_EDGE_REVIEWS_V1', TS_KEY = 'ALPHA_EDGE_UPDATED_AT';
+        let fileHandle = null, pendingHandle = null, writeChain = Promise.resolve();
+        let reviewsStore = { weekly: '', monthly: '' };
+        const FILE_TYPES = [{ description: 'JSON', accept: { 'application/json': ['.json'] } }];
+        const idb = () => new Promise((res, rej) => { const r = indexedDB.open('alpha_edge_files', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+        async function idbGet(k) { const db = await idb(); return new Promise(res => { const q = db.transaction('h').objectStore('h').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); }
+        async function idbSet(k, v) { const db = await idb(); return new Promise(res => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(v, k); t.oncomplete = res; t.onerror = res; }); }
+        const setLabel = t => { const e = document.getElementById('storeLabel'); if (e) e.textContent = t; };
+        const fileLabel = () => setLabel(fileHandle ? 'journal.json (linked)' : ghConf() ? 'GitHub (synced)' : pendingHandle ? 'Click Link JSON to reconnect' : 'Browser Storage');
+        function getData() { return { trades: tradeStore, notes: notesStore, reviews: reviewsStore, updatedAt: +localStorage.getItem(TS_KEY) || 0 }; }
+        const isEmpty = x => !(x.trades && x.trades.length || x.notes && x.notes.length || x.reviews && (x.reviews.weekly || x.reviews.monthly));
+
+        // every save in the app ends up here: browser cache + linked JSON file
+        function pushToFile() {
+            localStorage.setItem(TS_KEY, Date.now());
+            const snap = JSON.stringify(getData(), null, 2);
+            if (ghConf()) ghPush(snap);
+            if (!fileHandle) return;
+            writeChain = writeChain.then(async () => {
+                try { const w = await fileHandle.createWritable(); await w.write(snap); await w.close(); setLabel('Saved to journal.json ✓'); setTimeout(fileLabel, 1200); }
+                catch (e) { setLabel('File save failed - relink JSON'); }
+            });
+        }
+        function applyData(d) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(d.trades || []));
+            localStorage.setItem(NOTES_KEY, JSON.stringify(d.notes || []));
+            localStorage.setItem(REV_KEY, JSON.stringify(d.reviews || { weekly: '', monthly: '' }));
+            localStorage.setItem(TS_KEY, d.updatedAt || 0);
+        }
+        async function syncWithFile(rerender) {
+            const txt = await (await fileHandle.getFile()).text();
+            const d = JSON.parse(txt.trim() || '{}'), local = getData();
+            if (!isEmpty(d) && ((d.updatedAt || 0) >= local.updatedAt || isEmpty(local))) {
+                applyData(d);
+                if (rerender) { loadStoreData(); renderDashboard(); renderJournalTable(); }
+            } else if (!isEmpty(local) || !txt.trim()) pushToFile();
+            fileLabel();
+        }
+        async function initFileStore() {
+            if (!window.showOpenFilePicker) return;
+            try {
+                const h = await idbGet('journal'); if (!h) return;
+                if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') { fileHandle = h; await syncWithFile(false); }
+                else { pendingHandle = h; fileLabel(); }
+            } catch (e) { fileHandle = null; }
+        }
+        async function connectFile() {
+            if (!window.showOpenFilePicker) return alert('This browser cannot link files. Use Chrome or Edge. Export / Import still works.');
+            try {
+                if (pendingHandle && await pendingHandle.requestPermission({ mode: 'readwrite' }) === 'granted') {
+                    fileHandle = pendingHandle; pendingHandle = null; await syncWithFile(true); return;
+                }
+                let h;
+                if (confirm('OK = choose your existing journal.json\nCancel = create a new journal.json')) [h] = await showOpenFilePicker({ types: FILE_TYPES });
+                else h = await showSaveFilePicker({ suggestedName: 'journal.json', types: FILE_TYPES });
+                if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return;
+                fileHandle = h; pendingHandle = null; await idbSet('journal', h); await syncWithFile(true);
+            } catch (e) { if (e.name !== 'AbortError') alert('Could not link file: ' + e.message); }
+        }
+
+        const GH_KEY = 'ALPHA_EDGE_GH_V1';
+        const ghConf = () => { try { return JSON.parse(localStorage.getItem(GH_KEY)); } catch (e) { return null; } };
+        let ghSha = null, ghChain = Promise.resolve();
+        const ghUrl = c => `https://api.github.com/repos/${c.owner}/${c.repo}/contents/${c.path.split('/').map(encodeURIComponent).join('/')}`;
+        const ghHead = c => ({ Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github+json' });
+        async function ghRead() {
+            const c = ghConf(), r = await fetch(`${ghUrl(c)}?ref=${encodeURIComponent(c.branch)}&t=${Date.now()}`, { headers: ghHead(c), cache: 'no-store' });
+            if (r.status === 404) { ghSha = null; return null; }
+            if (!r.ok) throw new Error(`${r.status} ${(await r.json().catch(() => ({}))).message || ''}`);
+            const j = await r.json(); ghSha = j.sha;
+            return JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, '')))) || '{}');
+        }
+        function ghPut(snap) {
+            const c = ghConf(), body = { message: `journal update ${new Date().toISOString()}`, content: btoa(unescape(encodeURIComponent(snap))), branch: c.branch };
+            if (ghSha) body.sha = ghSha;
+            return fetch(ghUrl(c), { method: 'PUT', headers: { ...ghHead(c), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        }
+        function ghPush(snap) {
+            ghChain = ghChain.then(async () => {
+                try {
+                    let r = await ghPut(snap);
+                    if (r.status === 409 || r.status === 422) { await ghRead(); r = await ghPut(snap); }
+                    if (!r.ok) throw new Error(r.status);
+                    ghSha = (await r.json()).content.sha;
+                    setLabel('Saved to GitHub ✓'); setTimeout(fileLabel, 1500);
+                } catch (e) { setLabel('GitHub save failed - check token'); }
+            });
+        }
+        async function syncGitHub(rerender) {
+            const d = await ghRead(), local = getData();
+            if (d && !isEmpty(d) && ((d.updatedAt || 0) >= local.updatedAt || isEmpty(local))) {
+                applyData(d);
+                if (rerender) { loadStoreData(); renderDashboard(); renderJournalTable(); }
+            } else if (!isEmpty(local) || !d) pushToFile();
+            fileLabel();
+        }
+        async function initGitHub() {
+            if (!ghConf()) return;
+            try { await syncGitHub(false); } catch (e) { setLabel('GitHub offline - using local copy'); }
+        }
+        function openGh() {
+            const c = ghConf() || {};
+            ['Owner', 'Repo', 'Branch', 'Path', 'Token'].forEach(k => document.getElementById('gh' + k).value = c[k.toLowerCase()] || (k === 'Branch' ? 'main' : k === 'Path' ? 'journal.json' : ''));
+            openModal('ghModal');
+        }
+        async function saveGh() {
+            const g = k => document.getElementById('gh' + k).value.trim();
+            const c = { owner: g('Owner'), repo: g('Repo'), branch: g('Branch') || 'main', path: g('Path') || 'journal.json', token: g('Token') };
+            if (!c.owner || !c.repo || !c.token) return alert('Username, repository and token are required.');
+            localStorage.setItem(GH_KEY, JSON.stringify(c));
+            try { await syncGitHub(true); closeModal('ghModal'); }
+            catch (e) { localStorage.removeItem(GH_KEY); alert('GitHub connection failed: ' + e.message); }
+        }
+        function disconnectGh() { localStorage.removeItem(GH_KEY); closeModal('ghModal'); fileLabel(); }
+
+        function saveReviews() { localStorage.setItem(REV_KEY, JSON.stringify(reviewsStore)); pushToFile(); }
+        function loadReviews() {
+            try { reviewsStore = Object.assign({ weekly: '', monthly: '' }, JSON.parse(localStorage.getItem(REV_KEY))); } catch (e) {}
+            ['weekly', 'monthly'].forEach(t => {
+                const el = document.getElementById(t + 'ReviewNotes'); el.value = reviewsStore[t];
+                el.oninput = () => { reviewsStore[t] = el.value; clearTimeout(el._t); el._t = setTimeout(saveReviews, 500); };
+            });
+        }
+        window.onload = async function() {
+            loadStoreData();
+            await initFileStore();
+            await initGitHub();
+            loadStoreData();
+            initCharts();
+            renderDashboard();
+            renderJournalTable();
+            renderPlaybook();
+            renderPsychologyModule();
+            renderMediaGallery();
+            generateAIAudit();
+        };
+
+        const NOTES_KEY = 'ALPHA_EDGE_NOTES_V1';
+        let notesStore = [], editingNoteId = null;
+        const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const INDEX_MAP = {
+            NSE: ['NIFTY 50', 'BANK NIFTY', 'FIN NIFTY', 'NIFTY NEXT 50', 'NIFTY MIDCAP 100', 'NIFTY IT', 'INDIA VIX'],
+            NYSE: ['S&P 500', 'Dow Jones (DJIA)', 'NYSE Composite', 'NYSE FANG+', 'Russell 2000', 'VIX']
+        };
+        function fillIndexes(sel) {
+            const ex = document.getElementById('noteExchange').value, el = document.getElementById('noteIndex');
+            el.innerHTML = '<option value="">All / General</option>' + (INDEX_MAP[ex] || []).map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+            el.disabled = !ex; el.value = sel || '';
+        }
+        function persistNotes() { localStorage.setItem(NOTES_KEY, JSON.stringify(notesStore)); pushToFile(); }
+        function loadNotes() {
+            try { notesStore = JSON.parse(localStorage.getItem(NOTES_KEY)) || []; } catch (e) { notesStore = []; }
+            resetNoteForm(); renderNotes();
+        }
+        function saveNote() {
+            const body = document.getElementById('noteBody').value.trim();
+            if (!body) return;
+            const rec = { date: document.getElementById('noteDate').value || todayLocal(), title: document.getElementById('noteTitle').value.trim(), exchange: document.getElementById('noteExchange').value, index: document.getElementById('noteIndex').value, body };
+            if (editingNoteId) Object.assign(notesStore.find(n => n.id === editingNoteId), rec);
+            else notesStore.push({ id: Date.now(), ...rec });
+            persistNotes(); resetNoteForm(); renderNotes();
+        }
+        function editNote(id) {
+            const n = notesStore.find(x => x.id === id); if (!n) return;
+            editingNoteId = id;
+            document.getElementById('noteDate').value = n.date;
+            document.getElementById('noteTitle').value = n.title;
+            document.getElementById('noteBody').value = n.body;
+            document.getElementById('noteExchange').value = n.exchange || ''; fillIndexes(n.index);
+            document.getElementById('noteFormTitle').textContent = 'Edit Note';
+            document.getElementById('noteSaveBtn').textContent = 'Update Note';
+            document.getElementById('noteCancelBtn').classList.remove('hidden');
+            window.scrollTo(0, 0); document.getElementById('mainContent').scrollTop = 0;
+        }
+        function deleteNote(id) {
+            if (!confirm('Delete this note permanently?')) return;
+            notesStore = notesStore.filter(n => n.id !== id); persistNotes();
+            if (editingNoteId === id) resetNoteForm();
+            renderNotes();
+        }
+        function resetNoteForm() {
+            editingNoteId = null;
+            document.getElementById('noteDate').value = todayLocal();
+            document.getElementById('noteTitle').value = '';
+            document.getElementById('noteBody').value = '';
+            document.getElementById('noteExchange').value = ''; fillIndexes();
+            document.getElementById('noteFormTitle').textContent = 'New Note';
+            document.getElementById('noteSaveBtn').textContent = 'Save Note';
+            document.getElementById('noteCancelBtn').classList.add('hidden');
+        }
+        function renderNotes() {
+            const q = document.getElementById('noteSearch').value.toLowerCase();
+            const list = notesStore.filter(n => (n.title + ' ' + (n.exchange || '') + ' ' + (n.index || '') + ' ' + n.body).toLowerCase().includes(q))
+                .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+            document.getElementById('noteCount').textContent = `${list.length} Notes`;
+            document.getElementById('notesList').innerHTML = list.length ? list.map(n => `
+                <div class="bg-terminal-panel p-4 rounded terminal-border font-mono text-xs">
+                    <div class="flex justify-between items-start mb-2">
+                        <div><span class="text-terminal-accent font-bold">${esc(n.date)}</span>${n.exchange ? ` <span class="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-blue-950 text-terminal-accent border border-blue-800">${esc(n.exchange)}${n.index ? ' &middot; ' + esc(n.index) : ''}</span>` : ''}${n.title ? ` <span class="text-terminal-bright font-bold ml-2">${esc(n.title)}</span>` : ''}</div>
+                        <div class="space-x-3">
+                            <button onclick="editNote(${n.id})" class="text-slate-500 hover:text-terminal-accent"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteNote(${n.id})" class="text-slate-500 hover:text-terminal-red"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="text-slate-300 whitespace-pre-wrap break-words">${esc(n.body)}</div>
+                </div>`).join('') : EMPTY(q ? 'No notes match your search.' : 'No notes yet. Write your first one above.');
+        }
+
+        function loadStoreData() {
+            loadNotes(); loadReviews();
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    tradeStore = JSON.parse(saved);
+                } catch(e) {
+                    tradeStore = DEFAULT_TRADES;
+                }
+            } else {
+                tradeStore = DEFAULT_TRADES;
+                saveStoreData();
+            }
+        }
+
+        function saveStoreData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tradeStore)); pushToFile();
+        }
+
+        // NAVIGATION & MODALS
+        function switchTab(tabId) {
+            const tabs = ['dashboard', 'journal', 'notes', 'playbook', 'psychology', 'analytics', 'aireview', 'reviews', 'gallery'];
+            tabs.forEach(t => {
+                const mod = document.getElementById(`module-${t}`);
+                const btn = document.getElementById(`nav-${t}`);
+                if (mod) mod.classList.add('hidden');
+                if (btn) btn.classList.remove('active');
+            });
+
+            document.getElementById(`module-${tabId}`).classList.remove('hidden');
+            document.getElementById(`nav-${tabId}`).classList.add('active');
+
+            // Refresh charts when tab opens
+            if (tabId === 'analytics') updateAnalyticsCharts();
+            if (tabId === 'dashboard') updateDashboardCharts();
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function toggleDrawer(id) {
+            const drawer = document.getElementById(id);
+            drawer.classList.toggle('translate-x-full');
+        }
+
+        // CALCULATIONS & METRICS ENGINE
+        function calculateMetrics(trades) {
+            if (!trades.length) return { netPnl: 0, winRate: 0, winCount: 0, lossCount: 0, profitFactor: null, expectancy: 0, maxDd: 0, sharpe: '—' };
+            const wins = trades.filter(t => t.pnl > 0), losses = trades.filter(t => t.pnl <= 0);
+            const gp = wins.reduce((a, t) => a + t.pnl, 0), gl = Math.abs(losses.reduce((a, t) => a + t.pnl, 0));
+            const rs = trades.map(t => t.rMultiple), mean = rs.reduce((a, b) => a + b, 0) / rs.length;
+            const sd = Math.sqrt(rs.reduce((a, r) => a + (r - mean) ** 2, 0) / (rs.length - 1));
+            let cum = 0, peak = 0, maxDd = 0;
+            trades.forEach(t => { cum += t.pnl; peak = Math.max(peak, cum); maxDd = Math.max(maxDd, peak - cum); });
+            return { netPnl: gp - gl, winRate: wins.length / trades.length * 100, winCount: wins.length, lossCount: losses.length,
+                profitFactor: gl === 0 ? (gp > 0 ? Infinity : 0) : gp / gl, expectancy: mean, maxDd,
+                sharpe: (rs.length > 1 && sd > 0) ? (mean / sd).toFixed(2) : '—' };
+        }
+        const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const EMPTY = m => `<div class="text-xs font-mono text-slate-500 p-4">${m}</div>`;
+        const fmt = v => `${v >= 0 ? '+' : '-'}$${Math.abs(Math.round(v)).toLocaleString()}`;
+        const MARKETS = ['US_STOCK', 'IN_STOCK', 'OPTIONS'];
+        const allocData = () => MARKETS.map(k => tradeStore.filter(t => t.market === k).length);
+        const baseOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+        function mkChart(old, id, cfg) { if (old) old.destroy(); return new Chart(document.getElementById(id).getContext('2d'), cfg); }
+
+        // DASHBOARD RENDERER
+        function renderDashboard() {
+            tradeStore.sort((a, b) => a.date.localeCompare(b.date));
+            const m = calculateMetrics(tradeStore);
+            document.getElementById('hdrStats').textContent = `${tradeStore.length} TRADES LOGGED`;
+
+            document.getElementById('kpi-net-pnl').textContent = `${m.netPnl >= 0 ? '+' : ''}$${m.netPnl.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+            document.getElementById('kpi-net-pnl').className = `text-xl font-mono font-bold mt-1 ${m.netPnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}`;
+            
+            document.getElementById('kpi-win-rate').textContent = `${m.winRate.toFixed(1)}%`;
+            document.getElementById('kpi-win-bar').style.width = `${m.winRate}%`;
+            document.getElementById('kpi-win-count').textContent = m.winCount;
+            document.getElementById('kpi-loss-count').textContent = m.lossCount;
+
+            document.getElementById('kpi-profit-factor').textContent = m.profitFactor === null ? '—' : isFinite(m.profitFactor) ? m.profitFactor.toFixed(2) : '∞';
+            document.getElementById('kpi-expectancy').textContent = `${m.expectancy >= 0 ? '+' : ''}${m.expectancy.toFixed(2)} R`;
+            document.getElementById('kpi-max-dd').textContent = `-$${Math.round(m.maxDd).toLocaleString()}`;
+            document.getElementById('kpi-sharpe').textContent = m.sharpe;
+
+            // Render Recent Executions Table
+            const recentTable = document.getElementById('dashboardRecentTradesTable');
+            recentTable.innerHTML = '';
+            tradeStore.slice(-5).reverse().forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-terminal-hover';
+                tr.innerHTML = `
+                    <td class="py-2.5 text-slate-400">${t.date}</td>
+                    <td class="py-2.5 font-bold text-terminal-bright">${t.symbol}</td>
+                    <td class="py-2.5"><span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700">${t.market}</span></td>
+                    <td class="py-2.5 text-slate-300">${t.strategy}</td>
+                    <td class="py-2.5 font-bold ${t.rMultiple >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">${t.rMultiple > 0 ? '+' : ''}${t.rMultiple}R</td>
+                    <td class="py-2.5 text-right font-bold ${t.pnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toLocaleString()}</td>
+                `;
+                recentTable.appendChild(tr);
+            });
+
+            // Render Calendar Heatmap
+            renderHeatmap();
+            updateDashboardCharts(); renderPlaybook(); renderPsychologyModule(); renderMediaGallery(); generateAIAudit();
+            if (drawdownChartInstance) updateAnalyticsCharts();
+        }
+
+        function renderHeatmap() {
+            const grid = document.getElementById('pnlHeatmapGrid');
+            grid.innerHTML = '';
+            const last = tradeStore.length ? tradeStore[tradeStore.length - 1].date : new Date().toISOString().slice(0, 10);
+            const [y, mo] = last.split('-').map(Number);
+            grid.insertAdjacentHTML('beforeend', `<div class="col-span-7 text-slate-400 text-left mb-1">${y}-${String(mo).padStart(2, '0')}</div>`);
+            ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach(d => grid.insertAdjacentHTML('beforeend', `<div class="text-slate-500 font-bold py-1">${d}</div>`));
+            const days = new Date(y, mo, 0).getDate(), off = (new Date(y, mo - 1, 1).getDay() + 6) % 7, by = {};
+            tradeStore.forEach(t => by[t.date] = (by[t.date] || 0) + t.pnl);
+            for (let i = 0; i < off; i++) grid.insertAdjacentHTML('beforeend', '<div></div>');
+            for (let d = 1; d <= days; d++) {
+                const v = by[`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`];
+                const cls = v === undefined ? 'bg-slate-900/40 border-terminal-border text-slate-600' : v >= 0 ? 'bg-emerald-950/40 border-emerald-500/30 text-terminal-green' : 'bg-red-950/40 border-red-500/30 text-terminal-red';
+                grid.insertAdjacentHTML('beforeend', `<div class="p-2 rounded border flex flex-col justify-between h-12 text-[10px] ${cls}"><span>${d}</span><span class="font-bold">${v === undefined ? '' : fmt(v)}</span></div>`);
+            }
+        }
+
+        // CHART INSTANCES & INITIALIZATION
+        let dashboardEquityChart, marketAllocChart, drawdownChartInstance, dayOfWeekChartInstance, strategyRChartInstance, winLossDistChartInstance, mistakeCostChartInstance;
+
+        function initCharts() {
+            // 1. Dashboard Equity Chart
+            const ctx1 = document.getElementById('dashboardEquityChart').getContext('2d');
+            dashboardEquityChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: tradeStore.map(t => t.date),
+                    datasets: [{
+                        label: 'Realized Cumulative P&L ($)',
+                        data: getCumulativePnlData(),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        fill: true,
+                        tension: 0.2,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1e2638' }, ticks: { color: '#64748b', font: { family: 'JetBrains Mono' } } },
+                        y: { grid: { color: '#1e2638' }, ticks: { color: '#64748b', font: { family: 'JetBrains Mono' } } }
+                    }
+                }
+            });
+
+            // 2. Asset Allocation Chart
+            const ctx2 = document.getElementById('marketAllocationChart').getContext('2d');
+            marketAllocChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['US Stocks', 'India Stocks', 'Options'],
+                    datasets: [{
+                        data: allocData(),
+                        backgroundColor: ['#3b82f6', '#f59e0b', '#10b981'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } } } }
+                }
+            });
+        }
+
+        function getCumulativePnlData() {
+            let cum = 0;
+            return tradeStore.map(t => {
+                cum += t.pnl;
+                return cum;
+            });
+        }
+
+        function updateDashboardCharts() {
+            if (dashboardEquityChart) {
+                dashboardEquityChart.data.labels = tradeStore.map(t => t.date);
+                dashboardEquityChart.data.datasets[0].data = getCumulativePnlData();
+                dashboardEquityChart.update();
+            }
+            if (marketAllocChart) { marketAllocChart.data.datasets[0].data = allocData(); marketAllocChart.update(); }
+        }
+
+        function updateAnalyticsCharts() {
+            let cum = 0, peak = 0;
+            const dd = tradeStore.map(t => { cum += t.pnl; peak = Math.max(peak, cum); return cum - peak; });
+            drawdownChartInstance = mkChart(drawdownChartInstance, 'drawdownChart', { type: 'line', data: { labels: tradeStore.map(t => t.date), datasets: [{ data: dd, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.15)', fill: true, tension: 0.1 }] }, options: baseOpts });
+
+            const dow = [0, 0, 0, 0, 0, 0, 0];
+            tradeStore.forEach(t => { dow[(new Date(t.date + 'T00:00:00').getDay() + 6) % 7] += t.pnl; });
+            dayOfWeekChartInstance = mkChart(dayOfWeekChartInstance, 'dayOfWeekChart', { type: 'bar', data: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], datasets: [{ data: dow, backgroundColor: dow.map(v => v >= 0 ? '#10b981' : '#ef4444') }] }, options: baseOpts });
+
+            const sr = {};
+            tradeStore.forEach(t => sr[t.strategy] = (sr[t.strategy] || 0) + t.rMultiple);
+            strategyRChartInstance = mkChart(strategyRChartInstance, 'strategyRChart', { type: 'bar', data: { labels: Object.keys(sr), datasets: [{ data: Object.values(sr).map(v => +v.toFixed(2)), backgroundColor: '#3b82f6' }] }, options: baseOpts });
+
+            const edges = [-Infinity, -2, -1, 0, 1, 2, 3, Infinity], lbl = ['≤ -2R', '-2 to -1R', '-1 to 0R', '0 to 1R', '1 to 2R', '2 to 3R', '> 3R'];
+            const cnt = lbl.map((_, i) => tradeStore.filter(t => t.rMultiple > edges[i] && t.rMultiple <= edges[i + 1]).length);
+            winLossDistChartInstance = mkChart(winLossDistChartInstance, 'winLossDistChart', { type: 'bar', data: { labels: lbl, datasets: [{ data: cnt, backgroundColor: lbl.map((_, i) => i < 3 ? '#ef4444' : '#10b981') }] }, options: baseOpts });
+        }
+
+        // TRADE JOURNAL TABLE & FILTERS
+        function renderJournalTable(filteredData = null) {
+            const data = filteredData || tradeStore;
+            const tbody = document.getElementById('journalTableBody');
+            tbody.innerHTML = '';
+
+            document.getElementById('journalRecordCount').textContent = `${data.length} Trades Logged`;
+
+            data.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-terminal-hover transition';
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <div class="font-bold text-terminal-bright">${t.id}</div>
+                        <div class="text-[10px] text-slate-500">${t.date}</div>
+                    </td>
+                    <td class="p-3 font-bold text-terminal-accent">${t.symbol}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700">${t.market}</span></td>
+                    <td class="p-3 text-slate-300">${t.strategy}</td>
+                    <td class="p-3 text-slate-400">
+                        <div>Entry: $${t.entry}</div>
+                        <div>Exit: $${t.exit}</div>
+                    </td>
+                    <td class="p-3 text-slate-400">
+                        <div>Size: ${t.size}</div>
+                        <div>SL: $${t.sl}</div>
+                    </td>
+                    <td class="p-3 font-bold ${t.rMultiple >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">
+                        ${t.rMultiple >= 0 ? '+' : ''}${t.rMultiple} R
+                    </td>
+                    <td class="p-3 font-bold ${t.pnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">
+                        ${t.pnl >= 0 ? '+' : ''}$${t.pnl.toLocaleString()}
+                    </td>
+                    <td class="p-3">
+                        <span class="px-2 py-0.5 rounded text-[10px] ${t.psychState.includes('Calm') ? 'bg-emerald-950 text-terminal-green border border-emerald-800' : 'bg-red-950 text-terminal-red border border-red-800'}">
+                            ${t.psychState}
+                        </span>
+                    </td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteTrade('${t.id}')" class="text-slate-500 hover:text-terminal-red transition"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function applyJournalFilters() {
+            const search = document.getElementById('filterSearch').value.toLowerCase();
+            const market = document.getElementById('filterMarket').value;
+            const strategy = document.getElementById('filterStrategy').value;
+            const outcome = document.getElementById('filterOutcome').value;
+
+            const filtered = tradeStore.filter(t => {
+                const matchesSearch = t.symbol.toLowerCase().includes(search) || t.notes.toLowerCase().includes(search) || t.strategy.toLowerCase().includes(search);
+                const matchesMarket = market === 'ALL' || t.market === market;
+                const matchesStrategy = strategy === 'ALL' || t.strategy === strategy;
+                const matchesOutcome = outcome === 'ALL' || (outcome === 'WIN' && t.pnl > 0) || (outcome === 'LOSS' && t.pnl <= 0);
+
+                return matchesSearch && matchesMarket && matchesStrategy && matchesOutcome;
+            });
+
+            renderJournalTable(filtered);
+        }
+
+        // POSITION CALCULATOR & SUBMIT
+        function calculateRiskReward() {
+            const entry = parseFloat(document.getElementById('tradeEntry').value) || 0;
+            const exit = parseFloat(document.getElementById('tradeExit').value) || 0;
+            const sl = parseFloat(document.getElementById('tradeSL').value) || 0;
+            const size = parseFloat(document.getElementById('tradeSize').value) || 0;
+
+            if (entry && exit && size) {
+                const pnl = (exit - entry) * size;
+                const risk = Math.abs(entry - sl) * size;
+                const rMult = risk > 0 ? (pnl / risk).toFixed(2) : '0.00';
+
+                document.getElementById('calcPnl').textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+                document.getElementById('calcPnl').className = `font-bold text-sm ${pnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}`;
+                document.getElementById('calcR').textContent = `${rMult} R`;
+            }
+        }
+
+        function handleTradeSubmit(e) {
+            e.preventDefault();
+
+            const entry = parseFloat(document.getElementById('tradeEntry').value);
+            const exit = parseFloat(document.getElementById('tradeExit').value);
+            const sl = parseFloat(document.getElementById('tradeSL').value);
+            const size = parseFloat(document.getElementById('tradeSize').value);
+            const pnl = (exit - entry) * size;
+            const risk = Math.abs(entry - sl) * size;
+            const rMultiple = risk > 0 ? parseFloat((pnl / risk).toFixed(2)) : 0;
+
+            const newTrade = {
+                id: `TRD-${Date.now().toString().slice(-4)}`,
+                date: new Date().toISOString().split('T')[0],
+                symbol: document.getElementById('tradeSymbol').value.toUpperCase(),
+                market: document.getElementById('tradeMarket').value,
+                strategy: document.getElementById('tradeStrategy').value,
+                entry,
+                exit,
+                sl,
+                size,
+                pnl,
+                rMultiple,
+                psychState: document.getElementById('tradePsych').value,
+                mistakeTag: document.getElementById('tradeMistake').value,
+                notes: document.getElementById('tradeNotes').value,
+                img: null
+            };
+
+            tradeStore.push(newTrade);
+            saveStoreData();
+            
+            renderDashboard();
+            renderJournalTable();
+            closeModal('quickTradeModal');
+            document.getElementById('tradeEntryForm').reset();
+        }
+
+        function deleteTrade(id) {
+            if (confirm('Delete trade entry permanently?')) {
+                tradeStore = tradeStore.filter(t => t.id !== id);
+                saveStoreData();
+                renderDashboard();
+                renderJournalTable();
+            }
+        }
+
+        function toggleOptionFields() {
+            const market = document.getElementById('tradeMarket').value;
+            const optGroup = document.getElementById('optionFieldsGroup');
+            if (market === 'OPTIONS') {
+                optGroup.classList.remove('hidden');
+            } else {
+                optGroup.classList.add('hidden');
+            }
+        }
+
+        // PLAYBOOK MODULE RENDERER
+        function renderPlaybook() {
+            const by = {};
+            tradeStore.forEach(t => (by[t.strategy] = by[t.strategy] || []).push(t));
+            const names = Object.keys(by);
+            document.getElementById('playbookContainer').innerHTML = names.length ? names.map(n => {
+                const ts = by[n], w = ts.filter(t => t.pnl > 0).length, r = ts.reduce((a, t) => a + t.rMultiple, 0), net = ts.reduce((a, t) => a + t.pnl, 0);
+                return `<div class="bg-terminal-panel p-4 rounded terminal-border space-y-3">
+                    <div class="flex justify-between items-center border-b border-terminal-border pb-2">
+                        <h3 class="font-mono font-bold text-terminal-bright text-xs">${esc(n)}</h3>
+                        <div class="flex space-x-2 text-[10px] font-mono">
+                            <span class="bg-emerald-950 text-terminal-green px-2 py-0.5 rounded border border-emerald-800">Win Rate: ${(w / ts.length * 100).toFixed(0)}%</span>
+                            <span class="bg-blue-950 text-terminal-accent px-2 py-0.5 rounded border border-blue-800">Avg R: ${(r / ts.length).toFixed(2)}R</span>
+                        </div>
+                    </div>
+                    <div class="text-xs font-mono text-slate-400">${ts.length} trades &middot; Net ${fmt(net)}</div></div>`;
+            }).join('') : EMPTY('No strategies yet. Log a trade to build playbook stats.');
+        }
+
+        // AI TRADE REVIEW ENGINE
+        function generateAIAudit() {
+            const r = document.getElementById('aiAuditReport');
+            if (!tradeStore.length) { r.innerHTML = EMPTY('Log trades to run an audit.'); return; }
+            const m = calculateMetrics(tradeStore), w = tradeStore.filter(t => t.pnl > 0), l = tradeStore.filter(t => t.pnl < 0);
+            const avg = (a) => a.length ? a.reduce((x, t) => x + t.rMultiple, 0) / a.length : 0;
+            const aw = avg(w), al = Math.abs(avg(l));
+            const mc = {}; tradeStore.filter(t => t.mistakeTag !== 'None').forEach(t => mc[t.mistakeTag] = (mc[t.mistakeTag] || 0) + 1);
+            const flagged = Object.values(mc).reduce((a, b) => a + b, 0), top = Object.entries(mc).sort((a, b) => b[1] - a[1])[0];
+            const grade = tradeStore.length < 30 ? 'INSUFFICIENT SAMPLE (< 30 trades)' : m.expectancy > 0.5 ? 'STRONG EDGE' : m.expectancy > 0 ? 'MODEST EDGE' : 'NEGATIVE EDGE';
+            r.innerHTML = `
+                <div class="p-3 bg-slate-900 rounded border border-terminal-border space-y-2">
+                    <div class="font-bold text-terminal-gold flex items-center gap-2"><i class="fa-solid fa-microchip"></i> QUANT RATING: ${grade}</div>
+                    <p class="text-slate-300">Calculated across ${tradeStore.length} trades. Expectancy: <span class="font-bold ${m.expectancy >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">${m.expectancy.toFixed(2)} R</span> per trade. Win rate ${m.winRate.toFixed(1)}%.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="p-3 bg-slate-900 rounded border border-terminal-border">
+                        <span class="text-terminal-green font-bold block mb-1">PAYOFF</span>
+                        <p class="text-slate-400">Avg win ${aw.toFixed(2)}R vs avg loss ${al.toFixed(2)}R${al ? ` (payoff ratio ${(aw / al).toFixed(2)})` : ''}.</p>
+                    </div>
+                    <div class="p-3 bg-slate-900 rounded border border-terminal-border">
+                        <span class="text-terminal-red font-bold block mb-1">EXECUTION LEAKS</span>
+                        <p class="text-slate-400">${flagged ? `${flagged} trades flagged. Most frequent: <span class="text-terminal-red font-bold">${esc(top[0])}</span> (${top[1]}x).` : 'No execution errors flagged.'}</p>
+                    </div>
+                </div>`;
+        }
+
+        function renderPsychologyModule() {
+            const by = {};
+            tradeStore.forEach(t => (by[t.psychState] = by[t.psychState] || []).push(t));
+            document.getElementById('mindsetStatsList').innerHTML = Object.keys(by).length ? Object.entries(by).map(([k, ts]) => {
+                const w = ts.filter(t => t.pnl > 0).length, net = ts.reduce((a, t) => a + t.pnl, 0);
+                return `<div class="flex justify-between items-center p-2 bg-slate-900 rounded border border-terminal-border"><span>${esc(k)}</span><span class="${net >= 0 ? 'text-terminal-green' : 'text-terminal-red'} font-bold">${(w / ts.length * 100).toFixed(0)}% Win Rate (${fmt(net)})</span></div>`;
+            }).join('') : EMPTY('No trades logged yet.');
+            const cost = {};
+            tradeStore.filter(t => t.mistakeTag !== 'None' && t.pnl < 0).forEach(t => cost[t.mistakeTag] = (cost[t.mistakeTag] || 0) - t.pnl);
+            mistakeCostChartInstance = mkChart(mistakeCostChartInstance, 'mistakeCostChart', { type: 'bar', data: { labels: Object.keys(cost), datasets: [{ label: 'Realized loss ($)', data: Object.values(cost), backgroundColor: '#ef4444' }] }, options: baseOpts });
+        }
+
+        function renderMediaGallery() {
+            const container = document.getElementById('galleryContainer');
+            container.innerHTML = '';
+            const withImg = tradeStore.filter(t => t.img);
+            if (!withImg.length) container.innerHTML = EMPTY('No chart screenshots attached yet.');
+            withImg.forEach(t => {
+                const card = document.createElement('div');
+                card.className = 'bg-terminal-panel rounded border border-terminal-border overflow-hidden';
+                card.innerHTML = `
+                    <img src="${t.img}" class="w-full h-40 object-cover" alt="Chart Setup">
+                    <div class="p-3 font-mono text-xs">
+                        <div class="flex justify-between font-bold text-terminal-bright mb-1">
+                            <span>${t.symbol}</span>
+                            <span class="${t.pnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}">${t.pnl >= 0 ? '+' : ''}$${t.pnl}</span>
+                        </div>
+                        <p class="text-slate-400 text-[11px] truncate">${t.notes}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // JSON IMPORT / EXPORT CAPABILITY
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(getData(), null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `alpha_edge_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importDataJSON(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed) || Array.isArray(parsed.trades)) {
+                        if (Array.isArray(parsed.notes)) { notesStore = parsed.notes; persistNotes(); renderNotes(); }
+                        tradeStore = Array.isArray(parsed) ? parsed : parsed.trades;
+                        if (parsed.reviews) { reviewsStore = Object.assign({ weekly: '', monthly: '' }, parsed.reviews); saveReviews(); loadReviews(); }
+                        saveStoreData();
+                        renderDashboard();
+                        renderJournalTable();
+                        alert('Trade store successfully restored from JSON file!');
+                    }
+                } catch(err) {
+                    alert('Invalid JSON file format.');
+                }
+            };
+            fileReader.readAsText(event.target.files[0]);
+        }
+
+        function savePeriodReview(type) { reviewsStore[type] = document.getElementById(type + 'ReviewNotes').value; saveReviews(); setLabel('Saved ✓'); setTimeout(fileLabel, 1200); }
+    </script>
+</body>
+</html>
